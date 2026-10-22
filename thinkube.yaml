@@ -1,0 +1,43 @@
+# Copyright Alejandro Martínez Corriá and the Thinkube contributors
+# SPDX-License-Identifier: MIT
+
+apiVersion: thinkube.io/v1
+kind: ThinkubeDeployment
+metadata:
+  # The application's version; the generated app starts at it.
+  version: "0.1.0"
+
+spec:
+  deployment:
+    type: component
+    name: sglang
+    replicas: 0
+    # Pods are created per node by the LLM gateway when a model is loaded, so
+    # resting at zero replicas is idle rather than disabled.
+    gateway_managed: true
+
+  # The LLM gateway serves models on this component: one pod per model,
+  # copied from the inference container's Deployment.
+  llm_backend:
+    type: sglang
+    display_name: SGLang
+    container: inference
+    driver: per-model-pod
+    tier: performance
+    # SGLang answers /v1/messages itself; Anthropic requests reach it unchanged.
+    anthropic_messages: true
+
+  containers:
+    - name: inference
+      build: .
+      port: 8000
+      size: xlarge
+      gpu:
+        count: 1
+        memory: "20Gi"
+      health: /health
+      # SGLang opens its port once the weights are loaded from Thinkube
+      # Storage and its CUDA graphs are captured.
+      startupSeconds: 1800
+      test:
+        enabled: false
